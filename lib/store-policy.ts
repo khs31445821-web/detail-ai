@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { createClient } from "@/lib/supabase/server";
+
 export type StorePolicy = {
   shippingFee: number | null;
   freeShippingThreshold: number | null;
@@ -24,9 +26,7 @@ type StorePolicyRow = {
   customer_service: string | null;
 };
 
-type SupabaseLike = {
-  from: (table: string) => any;
-};
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 const EMPTY_POLICY: StorePolicy = {
   shippingFee: null,
@@ -83,7 +83,7 @@ export function mergeStorePolicy(
 }
 
 export async function loadEffectiveStorePolicy(
-  supabase: SupabaseLike,
+  supabase: SupabaseClient,
   workspaceId: string,
   productId?: string | null
 ): Promise<StorePolicy | null> {
