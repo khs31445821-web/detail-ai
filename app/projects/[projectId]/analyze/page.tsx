@@ -15,6 +15,7 @@ import {
   type AnalyzerFact,
   type AssetAnalysisSummary,
 } from "./analyzer-forms";
+import { SimpleAnalyzer } from "./simple-analyzer";
 
 export const maxDuration = 300;
 
@@ -81,9 +82,7 @@ type AssetAnalysisRow = {
 };
 
 type AnalyzePageProps = {
-  params: Promise<{
-    projectId: string;
-  }>;
+  params: Promise<{ projectId: string }>;
 };
 
 function getOriginalFileName(metadata: unknown, fallback: string) {
@@ -95,7 +94,6 @@ function getOriginalFileName(metadata: unknown, fallback: string) {
   ) {
     return metadata.original_filename;
   }
-
   return fallback;
 }
 
@@ -104,15 +102,9 @@ function isPrimitive(value: unknown): value is string | number | boolean {
 }
 
 function getEvidenceDetail(metadata: unknown) {
-  if (!metadata || typeof metadata !== "object") {
-    return null;
-  }
-
+  if (!metadata || typeof metadata !== "object") return null;
   const record = metadata as Record<string, unknown>;
-  if (!isPrimitive(record.observedValue)) {
-    return null;
-  }
-
+  if (!isPrimitive(record.observedValue)) return null;
   return {
     value: record.observedValue,
     observation:
@@ -128,16 +120,10 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const workspace = await getOrCreateWorkspace();
-
-  if (!workspace) {
-    redirect("/login");
-  }
+  if (!workspace) redirect("/login");
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
@@ -163,87 +149,45 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
       cause: projectError,
     });
   }
+  if (!project) notFound();
 
-  if (!project) {
-    notFound();
-  }
+  const productRelation = project.products as ProductSummary | ProductSummary[] | null;
+  const product = Array.isArray(productRelation) ? productRelation[0] : productRelation;
+  if (!product) notFound();
 
-  const productRelation = project.products as
-    | ProductSummary
-    | ProductSummary[]
-    | null;
-  const product = Array.isArray(productRelation)
-    ? productRelation[0]
-    : productRelation;
+  const [categoriesResult, assetsResult, productFactsResult] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("key, parent_key, display_name, sort_order")
+      .eq("active", true)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("product_assets")
+      .select("id, storage_path, mime_type, metadata")
+      .eq("product_id", product.id)
+      .like("storage_path", `${workspace.id}/products/${product.id}/original/%`)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("product_facts")
+      .select("id, fact_definition_id, value_json, source, status, confidence, locked")
+      .eq("product_id", product.id),
+  ]);
 
-  if (!product) {
-    notFound();
-  }
-
-  const [categoriesResult, assetsResult, productFactsResult] =
-    await Promise.all([
-      supabase
-        .from("categories")
-        .select("key, parent_key, display_name, sort_order")
-        .eq("active", true)
-        .order("sort_order", { ascending: true }),
-      supabase
-        .from("product_assets")
-        .select("id, storage_path, mime_type, metadata")
-        .eq("product_id", product.id)
-        .like(
-          "storage_path",
-          `${workspace.id}/products/${product.id}/original/%`
-        )
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("product_facts")
-        .select(
-          "id, fact_definition_id, value_json, source, status, confidence, locked"
-        )
-        .eq("product_id", product.id),
-    ]);
-
-  if (categoriesResult.error) {
-    throw new Error("카테고리를 불러오지 못했습니다.", {
-      cause: categoriesResult.error,
-    });
-  }
-
-  if (assetsResult.error) {
-    throw new Error("상품 이미지를 불러오지 못했습니다.", {
-      cause: assetsResult.error,
-    });
-  }
-
-  if (productFactsResult.error) {
-    throw new Error("Product Brain을 불러오지 못했습니다.", {
-      cause: productFactsResult.error,
-    });
-  }
+  if (categoriesResult.error) throw categoriesResult.error;
+  if (assetsResult.error) throw assetsResult.error;
+  if (productFactsResult.error) throw productFactsResult.error;
 
   const categories = (categoriesResult.data ?? []) as CategoryRow[];
   let categoryFactRows: CategoryFactRow[] = [];
   let missingRequiredBlueprintNames: string[] = [];
+
   if (product.category_key) {
-    const categoryLineageKeys = resolveCategoryLineageKeys(
-      categories,
-      product.category_key
-    );
-    try {
-      const categoryCatalog = await loadResolvedCategoryFacts(
-        supabase,
-        categoryLineageKeys
-      );
-      categoryFactRows = categoryCatalog.facts as CategoryFactRow[];
-      missingRequiredBlueprintNames = categoryCatalog.missingBlueprints
-        .filter((blueprint) => blueprint.importance === "REQUIRED")
-        .map((blueprint) => blueprint.displayName);
-    } catch (error) {
-      throw new Error("카테고리 Fact를 불러오지 못했습니다.", {
-        cause: error,
-      });
-    }
+    const lineageKeys = resolveCategoryLineageKeys(categories, product.category_key);
+    const categoryCatalog = await loadResolvedCategoryFacts(supabase, lineageKeys);
+    categoryFactRows = categoryCatalog.facts as CategoryFactRow[];
+    missingRequiredBlueprintNames = categoryCatalog.missingBlueprints
+      .filter((blueprint) => blueprint.importance === "REQUIRED")
+      .map((blueprint) => blueprint.displayName);
   }
 
   const assets = (assetsResult.data ?? []) as ProductAssetRow[];
@@ -256,18 +200,9 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
     const { data, error } = await supabase
       .from("asset_analyses")
       .select("id, asset_id, observations, created_at")
-      .in(
-        "asset_id",
-        assets.map((asset) => asset.id)
-      )
+      .in("asset_id", assets.map((asset) => asset.id))
       .order("created_at", { ascending: false });
-
-    if (error) {
-      throw new Error("이미지 분석 결과를 불러오지 못했습니다.", {
-        cause: error,
-      });
-    }
-
+    if (error) throw error;
     assetAnalysisRows = (data ?? []) as AssetAnalysisRow[];
   }
 
@@ -275,17 +210,8 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
     const { data, error } = await supabase
       .from("fact_evidence")
       .select("fact_id, asset_id, metadata")
-      .in(
-        "fact_id",
-        productFacts.map((fact) => fact.id)
-      );
-
-    if (error) {
-      throw new Error("Fact 근거를 불러오지 못했습니다.", {
-        cause: error,
-      });
-    }
-
+      .in("fact_id", productFacts.map((fact) => fact.id));
+    if (error) throw error;
     factEvidenceRows = (data ?? []) as FactEvidenceRow[];
   }
 
@@ -301,17 +227,12 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
 
   factEvidenceRows.forEach((row) => {
     const detail = getEvidenceDetail(row.metadata);
-    if (!detail) {
-      return;
-    }
-
+    if (!detail) return;
     const asset = row.asset_id ? assetById.get(row.asset_id) : undefined;
     const current = evidenceByFact.get(row.fact_id) ?? [];
     current.push({
       ...detail,
-      fileName: asset
-        ? getOriginalFileName(asset.metadata, "상품 이미지")
-        : null,
+      fileName: asset ? getOriginalFileName(asset.metadata, "상품 이미지") : null,
     });
     evidenceByFact.set(row.fact_id, current);
   });
@@ -324,10 +245,7 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
     .reduce<AnalyzerFact[]>((facts, categoryFact) => {
       const relation = categoryFact.fact_definitions;
       const definition = Array.isArray(relation) ? relation[0] : relation;
-      if (!definition) {
-        return facts;
-      }
-
+      if (!definition) return facts;
       const savedFact = productFactByDefinition.get(definition.id);
       facts.push({
         factId: savedFact?.id ?? null,
@@ -338,64 +256,30 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
         description: definition.description,
         importance: categoryFact.importance,
         askUser: categoryFact.ask_user,
-        value: savedFact ? (savedFact.value_json as unknown) : null,
+        value: savedFact ? savedFact.value_json : null,
         source: savedFact?.source ?? null,
         status: savedFact?.status ?? null,
         confidence: savedFact?.confidence ?? null,
         locked: savedFact?.locked ?? false,
-        evidence: savedFact ? (evidenceByFact.get(savedFact.id) ?? []) : [],
+        evidence: savedFact ? evidenceByFact.get(savedFact.id) ?? [] : [],
       });
-
       return facts;
     }, [])
     .sort((first, second) => {
-      if (first.askUser !== second.askUser) {
-        return first.askUser ? -1 : 1;
-      }
-
+      if (first.askUser !== second.askUser) return first.askUser ? -1 : 1;
       return first.displayName.localeCompare(second.displayName, "ko");
     });
-
-  const signedUrlByPath = new Map<string, string>();
-  if (assets.length > 0) {
-    const { data: signedAssets, error: signedAssetsError } = await supabase.storage
-      .from("product-assets")
-      .createSignedUrls(
-        assets.map((asset) => asset.storage_path),
-        60 * 60
-      );
-
-    if (signedAssetsError) {
-      console.error("상품 이미지 signed URL 생성 실패:", signedAssetsError);
-    } else {
-      signedAssets?.forEach((asset) => {
-        if (asset.path && asset.signedUrl) {
-          signedUrlByPath.set(asset.path, asset.signedUrl);
-        }
-      });
-    }
-  }
 
   const selectedCategory = categories.find(
     (category) => category.key === product.category_key
   );
-  const formattedPrice = new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency: product.currency || "KRW",
-    maximumFractionDigits: 0,
-  }).format(product.base_price ?? 0);
+
   const seenAnalysisAssets = new Set<string>();
   const analysisSummaries = assetAnalysisRows.reduce<AssetAnalysisSummary[]>(
     (summaries, row) => {
-      if (seenAnalysisAssets.has(row.asset_id)) {
-        return summaries;
-      }
-
+      if (seenAnalysisAssets.has(row.asset_id)) return summaries;
       const parsed = storedAssetAnalysisSchema.safeParse(row.observations);
-      if (!parsed.success) {
-        return summaries;
-      }
-
+      if (!parsed.success) return summaries;
       seenAnalysisAssets.add(row.asset_id);
       const asset = assetById.get(row.asset_id);
       summaries.push({
@@ -418,7 +302,6 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
           outcome: fact.outcome,
         })),
       });
-
       return summaries;
     },
     []
@@ -427,14 +310,14 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
   return (
     <main className="min-h-screen bg-neutral-50 text-neutral-950">
       <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div>
             <p className="text-sm font-semibold text-violet-600">DETAIL AI</p>
-            <p className="mt-1 text-sm text-neutral-500">Product Analyzer</p>
+            <p className="mt-1 text-sm text-neutral-500">상품 정보 정리</p>
           </div>
           <Link
             href="/dashboard"
-            className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+            className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
           >
             대시보드
           </Link>
@@ -442,111 +325,80 @@ export default async function AnalyzePage({ params }: AnalyzePageProps) {
       </header>
 
       <div className="border-b border-neutral-200 bg-neutral-950 text-white">
-        <div className="mx-auto max-w-7xl px-6 py-9">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
-              상품 등록 완료
-            </span>
-            <span className="text-xs text-neutral-500">→</span>
-            <span className="rounded-full bg-violet-500 px-3 py-1.5 text-xs font-bold text-white">
-              Product Brain 구축
-            </span>
-            <span className="text-xs text-neutral-600">→ 판매 전략</span>
-          </div>
+        <div className="mx-auto max-w-6xl px-6 py-9">
+          <span className="inline-flex rounded-full bg-violet-500 px-3 py-1.5 text-xs font-bold">
+            AI 상품 분석
+          </span>
           <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">
-            상품을 정확히 이해하는 단계예요
+            먼저 정리하고, 필요한 것만 물어볼게요
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-400">
-            사진에서 보이는 것과 판매자가 확인한 사실을 구분해 신뢰할 수 있는
-            Product Brain을 만듭니다.
+            아는 만큼 입력한 내용을 정리하고 사진에서 확인 가능한 정보를 더합니다. 모르는 정보는 비워둔 채로 진행할 수 있습니다.
           </p>
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-7xl gap-7 px-6 py-10 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="space-y-6">
-          <section className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
-            {assets.length > 0 ? (
-              <div className="grid grid-cols-2 gap-px bg-neutral-200">
-                {assets.slice(0, 4).map((asset, index) => {
-                  const signedUrl = signedUrlByPath.get(asset.storage_path);
-                  const fileName = getOriginalFileName(
-                    asset.metadata,
-                    `상품 이미지 ${index + 1}`
-                  );
-
-                  return signedUrl ? (
-                    <div
-                      key={asset.id}
-                      role="img"
-                      aria-label={fileName}
-                      title={fileName}
-                      className={`bg-white bg-cover bg-center ${
-                        assets.length === 1 ? "col-span-2 aspect-[4/3]" : "aspect-square"
-                      }`}
-                      style={{ backgroundImage: `url(${signedUrl})` }}
-                    />
-                  ) : (
-                    <div
-                      key={asset.id}
-                      className="flex aspect-square items-center justify-center bg-neutral-100 text-xs text-neutral-400"
-                    >
-                      미리보기 없음
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex aspect-[4/3] items-center justify-center bg-neutral-100 text-sm text-neutral-400">
-                등록된 이미지가 없습니다
-              </div>
-            )}
-
-            <div className="p-6">
-              <p className="text-xs font-semibold text-neutral-400">분석 상품</p>
-              <h2 className="mt-2 text-lg font-bold">{product.name}</h2>
-              <p className="mt-1 text-sm font-semibold text-violet-600">
-                {formattedPrice}
-              </p>
-              <p className="mt-4 text-sm leading-6 text-neutral-500">
-                {product.description}
-              </p>
-              <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-4 text-xs text-neutral-400">
-                <span>원본 이미지</span>
-                <span className="font-semibold text-neutral-700">
-                  {assets.length}장
-                </span>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-3xl bg-neutral-950 p-6 text-white shadow-lg">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-300">
-              AI Safety
+      <div className="mx-auto grid max-w-6xl gap-7 px-6 py-10 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm lg:sticky lg:top-6">
+          <p className="text-xs font-semibold text-neutral-400">현재 상품</p>
+          <h2 className="mt-2 text-lg font-bold text-neutral-950">{product.name}</h2>
+          {product.base_price !== null && (
+            <p className="mt-1 text-sm font-bold text-violet-600">
+              {new Intl.NumberFormat("ko-KR").format(product.base_price)}원
             </p>
-            <h2 className="mt-3 text-base font-bold">Fact First 원칙</h2>
-            <p className="mt-3 text-xs leading-5 text-neutral-400">
-              이미지에서 확정할 수 없는 무게, 원산지, 성능 정보는 사용자 확인
-              전까지 UNKNOWN으로 유지합니다.
+          )}
+          {product.description && (
+            <p className="mt-4 line-clamp-6 whitespace-pre-wrap text-xs leading-5 text-neutral-500">
+              {product.description}
             </p>
-          </section>
+          )}
+          <div className="mt-5 border-t border-neutral-100 pt-4 text-xs text-neutral-500">
+            등록 이미지 {assets.length}장
+          </div>
         </aside>
 
-        <AnalyzerForms
-          projectId={projectId}
-          categories={categories.map((category) => ({
-            key: category.key,
-            displayName: category.display_name,
-            parentKey: category.parent_key,
-          }))}
-          selectedCategoryKey={product.category_key}
-          selectedCategoryName={selectedCategory?.display_name ?? null}
-          facts={analyzerFacts}
-          assetCount={assets.length}
-          openAIConfigured={isOpenAIConfigured()}
-          analysisSummaries={analysisSummaries}
-          missingRequiredBlueprintNames={missingRequiredBlueprintNames}
-        />
+        <div>
+          <SimpleAnalyzer
+            projectId={projectId}
+            productId={product.id}
+            categories={categories.map((category) => ({
+              key: category.key,
+              displayName: category.display_name,
+              parentKey: category.parent_key,
+            }))}
+            selectedCategoryKey={product.category_key}
+            selectedCategoryName={selectedCategory?.display_name ?? null}
+            facts={analyzerFacts}
+            assetCount={assets.length}
+            openAIConfigured={isOpenAIConfigured()}
+          />
+
+          <details className="mt-8 rounded-3xl border border-neutral-200 bg-white">
+            <summary className="cursor-pointer list-none px-6 py-5 text-sm font-bold text-neutral-600">
+              고급 상품 정보 관리
+              <span className="ml-2 text-xs font-normal text-neutral-400">
+                전체 항목 · 분석 근거 · 잠금 등
+              </span>
+            </summary>
+            <div className="border-t border-neutral-200 p-5 sm:p-6">
+              <AnalyzerForms
+                projectId={projectId}
+                categories={categories.map((category) => ({
+                  key: category.key,
+                  displayName: category.display_name,
+                  parentKey: category.parent_key,
+                }))}
+                selectedCategoryKey={product.category_key}
+                selectedCategoryName={selectedCategory?.display_name ?? null}
+                facts={analyzerFacts}
+                assetCount={assets.length}
+                openAIConfigured={isOpenAIConfigured()}
+                analysisSummaries={analysisSummaries}
+                missingRequiredBlueprintNames={missingRequiredBlueprintNames}
+              />
+            </div>
+          </details>
+        </div>
       </div>
     </main>
   );
