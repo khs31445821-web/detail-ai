@@ -32,7 +32,7 @@ export const modelStrategySchema = z
     tone: z.enum(["WARM", "CLEAR", "BOLD", "PREMIUM", "FRIENDLY"]),
     benefits: z.array(strategyBenefitSchema).min(2).max(4),
     keywords: z.array(z.string().trim().min(1).max(40)).min(3).max(8),
-    supportingFactIds: z.array(z.string().uuid()).min(1).max(12),
+    supportingFactIds: z.array(z.string().uuid()).max(12),
     riskNotes: z.array(z.string().trim().min(1).max(240)).max(6),
   })
   .strict();
