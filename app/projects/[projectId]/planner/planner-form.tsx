@@ -4,16 +4,14 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import type { PageDocument } from "@/lib/page-document";
-
 import {
-  generatePageDocument,
-  type PlannerActionState,
-} from "./actions";
+  generateFlexiblePageDocument,
+} from "./flexible-actions";
+import type { PlannerActionState } from "./actions";
 
 type PlannerFormProps = {
   projectId: string;
   providerConfigured: boolean;
-  providerLabel: string;
   hasPageDocument: boolean;
   sectionCount: number;
   marketResearch: PageDocument["marketResearch"];
@@ -24,12 +22,11 @@ const initialState: PlannerActionState = { status: "idle" };
 export function PlannerForm({
   projectId,
   providerConfigured,
-  providerLabel,
   hasPageDocument,
   sectionCount,
   marketResearch,
 }: PlannerFormProps) {
-  const action = generatePageDocument.bind(null, projectId);
+  const action = generateFlexiblePageDocument.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
@@ -37,19 +34,18 @@ export function PlannerForm({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-600">
-            PageDocument · {providerLabel}
+            상세페이지 만들기
           </p>
           <h2 className="mt-2 text-xl font-bold text-neutral-950">
-            상세페이지 초안 생성
+            선택한 판매 방향으로 초안을 만들게요
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
-            AI는 구조화된 JSON만 만들고, 실제 디자인은 미리 구현된 React Block이
-            담당합니다.
+            지금 확인된 상품 정보만 사용해 카피와 디자인 구성을 자동으로 만듭니다.
           </p>
         </div>
         {hasPageDocument && (
           <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-            {sectionCount}개 블록 준비됨
+            초안 {sectionCount}개 영역
           </span>
         )}
       </div>
@@ -64,8 +60,7 @@ export function PlannerForm({
             className="mt-0.5 h-4 w-4 shrink-0 accent-violet-600"
           />
           <span>
-            페이지 설계를 위해 선택 전략, 상품 기본정보와 CONFIRMED Fact가
-            {` ${providerLabel} API`}로 전송되는 것에 동의합니다.
+            상세페이지 초안을 만들기 위해 선택한 판매 방향과 확인된 상품 정보를 AI 생성 서비스에 전송하는 데 동의합니다.
           </span>
         </label>
         <button
@@ -74,16 +69,11 @@ export function PlannerForm({
           className="mt-4 w-full rounded-2xl bg-violet-600 px-5 py-4 text-sm font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
         >
           {pending
-            ? "전환 구조와 블록을 설계하는 중..."
+            ? "카피와 디자인 구성을 만드는 중..."
             : hasPageDocument
-              ? "PageDocument 다시 생성"
-              : "PageDocument 생성"}
+              ? "상세페이지 초안 다시 만들기"
+              : "상세페이지 초안 만들기"}
         </button>
-        {hasPageDocument && (
-          <p className="mt-2 text-xs text-amber-700">
-            다시 생성하면 현재 PageDocument 초안이 새 구조로 교체됩니다.
-          </p>
-        )}
       </form>
 
       {state.status !== "idle" && state.message && (
@@ -100,33 +90,17 @@ export function PlannerForm({
       )}
 
       {marketResearch && (
-        <details className="mt-5 overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 open:bg-white">
-          <summary className="cursor-pointer list-none px-4 py-3.5 text-xs font-black text-neutral-800">
-            전략 단계에서 반영한 시장·리뷰 조사 · 출처 {marketResearch.sources.length}개
-            <span className="ml-2 text-[10px] font-semibold text-neutral-400">
-              펼쳐보기
-            </span>
+        <details className="mt-5 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 open:bg-white">
+          <summary className="cursor-pointer list-none px-4 py-3.5 text-xs font-bold text-neutral-700">
+            AI가 참고한 시장·리뷰 정보 보기
           </summary>
-          <div className="border-t border-stone-200 px-4 py-4">
+          <div className="border-t border-neutral-200 px-4 py-4">
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-[10px] leading-4 text-amber-800">
               {marketResearch.caveat}
             </p>
             <p className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap text-[11px] leading-5 text-neutral-600">
               {marketResearch.summary}
             </p>
-            <div className="mt-4 grid gap-2">
-              {marketResearch.sources.map((source, index) => (
-                <a
-                  key={`${source.url}-${index}`}
-                  href={source.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="truncate rounded-xl border border-stone-200 bg-white px-3 py-2 text-[10px] font-bold text-violet-700 hover:border-violet-300"
-                >
-                  {index + 1}. {source.title}
-                </a>
-              ))}
-            </div>
           </div>
         </details>
       )}
@@ -136,7 +110,7 @@ export function PlannerForm({
           href={`/projects/${projectId}/editor`}
           className="mt-5 block rounded-2xl bg-neutral-950 px-5 py-4 text-center text-sm font-bold text-white transition hover:bg-neutral-800"
         >
-          블록 렌더링 결과 확인
+          편집 시작하기 →
         </Link>
       )}
     </section>
