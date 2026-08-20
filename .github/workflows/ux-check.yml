@@ -1,9 +1,9 @@
 name: UX TypeScript and lint check
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/one-input-flow
+      - main
 
 permissions:
   contents: read
