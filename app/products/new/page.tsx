@@ -40,21 +40,18 @@ export default async function NewProductPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:py-14">
-        <div className="mb-9 max-w-2xl">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-violet-600">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100">
-              1
-            </span>
-            상품 등록
+      <div className="mx-auto max-w-6xl px-6 py-10 lg:py-16">
+        <div className="mx-auto mb-10 max-w-3xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">
+            1~3분 AI 상세페이지 제작
           </div>
-
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            어떤 상품의 상세페이지를 만들까요?
+          <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
+            사진 한 장이면,
+            <br className="hidden sm:block" /> 상세페이지가 시작됩니다
           </h1>
-          <p className="mt-3 text-base leading-7 text-neutral-500">
-            정확한 상품 정보와 원본 이미지를 등록해주세요. 다음 단계에서 AI가
-            상품을 분석하고 판매 전략을 제안합니다.
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-neutral-500 sm:text-lg">
+            사진 한 장 또는 상품명만 입력하세요. AI가 상품을 분석하고 판매기획,
+            카피라이팅, 디자인 레이아웃까지 자동으로 이어갑니다.
           </p>
         </div>
 
