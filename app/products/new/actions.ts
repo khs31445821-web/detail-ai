@@ -21,14 +21,31 @@ const ACCEPTED_IMAGE_TYPES = new Set([
 ]);
 
 const productSchema = z.object({
-  name: z
+  name: z.string().trim().max(120, "상품명은 120자 이내로 입력해주세요."),
+  price: z
     .string()
     .trim()
-    .max(120, "상품명은 120자 이내로 입력해주세요."),
+    .max(12, "판매가격을 다시 확인해주세요.")
+    .refine(
+      (value) => value === "" || /^\d+$/.test(value),
+      "판매가격은 숫자로 입력해주세요."
+    )
+    .refine(
+      (value) => value === "" || Number(value) <= 999_999_999,
+      "판매가격은 999,999,999원 이하여야 해요."
+    ),
+  description: z
+    .string()
+    .trim()
+    .max(2000, "상품 특징은 2,000자 이내로 입력해주세요."),
+  categoryKey: z.string().trim().max(100),
 });
 
 type FieldErrors = {
   name?: string[];
+  price?: string[];
+  description?: string[];
+  categoryKey?: string[];
   images?: string[];
 };
 
@@ -38,6 +55,9 @@ export type CreateProductState = {
   fieldErrors?: FieldErrors;
   values?: {
     name: string;
+    price: string;
+    description: string;
+    categoryKey: string;
   };
 };
 
@@ -67,6 +87,9 @@ function sanitizeFileName(fileName: string) {
 function getFormValues(formData: FormData) {
   return {
     name: String(formData.get("name") ?? ""),
+    price: String(formData.get("price") ?? ""),
+    description: String(formData.get("description") ?? ""),
+    categoryKey: String(formData.get("categoryKey") ?? ""),
   };
 }
 
@@ -184,10 +207,12 @@ export async function createProduct(
   const images = getImages(formData);
   const imageErrors = validateImages(images);
 
-  const hasName = Boolean(values.name.trim());
-  const hasImages = images.length > 0;
-  if (!hasName && !hasImages) {
-    imageErrors.push("상품 사진 한 장 또는 상품명 중 하나는 입력해주세요.");
+  const hasStartingInfo =
+    images.length > 0 ||
+    Boolean(values.name.trim()) ||
+    Boolean(values.description.trim());
+  if (!hasStartingInfo) {
+    imageErrors.push("상품 사진, 상품명 또는 특징 중 하나만 알려주세요.");
   }
 
   if (!parsedProduct.success || imageErrors.length > 0) {
@@ -197,7 +222,7 @@ export async function createProduct(
 
     return {
       status: "error",
-      message: "상품 사진 한 장 또는 상품명만 있으면 시작할 수 있어요.",
+      message: "아는 정보만 입력해도 시작할 수 있어요.",
       fieldErrors: {
         ...fieldErrors,
         ...(imageErrors.length > 0 ? { images: imageErrors } : {}),
@@ -240,6 +265,26 @@ export async function createProduct(
     };
   }
 
+  let categoryKey: string | null = null;
+  if (parsedProduct.data.categoryKey) {
+    const { data: category, error: categoryError } = await supabase
+      .from("categories")
+      .select("key")
+      .eq("key", parsedProduct.data.categoryKey)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (categoryError || !category) {
+      return {
+        status: "error",
+        message: "선택한 카테고리를 사용할 수 없습니다.",
+        fieldErrors: { categoryKey: ["카테고리를 다시 선택해주세요."] },
+        values,
+      };
+    }
+    categoryKey = category.key;
+  }
+
   const initialProductName = deriveInitialProductName(parsedProduct.data.name, images);
   let productId: string | undefined;
   let projectId: string | undefined;
@@ -252,9 +297,12 @@ export async function createProduct(
         workspace_id: workspace.id,
         created_by: user.id,
         name: initialProductName,
-        base_price: null,
+        base_price: parsedProduct.data.price
+          ? Number(parsedProduct.data.price)
+          : null,
         currency: "KRW",
-        description: null,
+        description: parsedProduct.data.description || null,
+        category_key: categoryKey,
       })
       .select("id")
       .single();
