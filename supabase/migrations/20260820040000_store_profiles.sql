@@ -40,22 +40,8 @@ create policy "store_profiles_workspace_members"
 on public.store_profiles
 for all
 to authenticated
-using (
-  exists (
-    select 1
-    from public.workspace_members wm
-    where wm.workspace_id = store_profiles.workspace_id
-      and wm.user_id = auth.uid()
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.workspace_members wm
-    where wm.workspace_id = store_profiles.workspace_id
-      and wm.user_id = auth.uid()
-  )
-);
+using (public.is_workspace_member(workspace_id))
+with check (public.is_workspace_member(workspace_id));
 
 drop policy if exists "product_store_overrides_workspace_members" on public.product_store_overrides;
 create policy "product_store_overrides_workspace_members"
@@ -63,12 +49,7 @@ on public.product_store_overrides
 for all
 to authenticated
 using (
-  exists (
-    select 1
-    from public.workspace_members wm
-    where wm.workspace_id = product_store_overrides.workspace_id
-      and wm.user_id = auth.uid()
-  )
+  public.is_workspace_member(workspace_id)
   and exists (
     select 1
     from public.products p
@@ -77,12 +58,7 @@ using (
   )
 )
 with check (
-  exists (
-    select 1
-    from public.workspace_members wm
-    where wm.workspace_id = product_store_overrides.workspace_id
-      and wm.user_id = auth.uid()
-  )
+  public.is_workspace_member(workspace_id)
   and exists (
     select 1
     from public.products p
