@@ -2,10 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { pageDocumentSchema } from "@/lib/page-document";
-import {
-  getPagePlannerProviderLabel,
-  isPagePlannerConfigured,
-} from "@/lib/page-planner-provider";
+import { isPagePlannerConfigured } from "@/lib/page-planner-provider";
 import { storedStrategySchema } from "@/lib/strategy";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateWorkspace } from "@/lib/workspace/get-or-create-workspace";
@@ -29,15 +26,10 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const workspace = await getOrCreateWorkspace();
-  if (!workspace) {
-    redirect("/login");
-  }
+  if (!workspace) redirect("/login");
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
@@ -46,49 +38,27 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
       name,
       selected_strategy_id,
       page_document,
-      products (
-        id,
-        name
-      )
+      products (id, name)
     `)
     .eq("id", projectId)
     .eq("workspace_id", workspace.id)
     .maybeSingle();
+  if (projectError) throw projectError;
+  if (!project) notFound();
 
-  if (projectError) {
-    throw new Error("프로젝트 정보를 불러오지 못했습니다.", {
-      cause: projectError,
-    });
-  }
-  if (!project) {
-    notFound();
-  }
-
-  const productRelation = project.products as
-    | ProductRelation
-    | ProductRelation[]
-    | null;
-  const product = Array.isArray(productRelation)
-    ? productRelation[0]
-    : productRelation;
-  if (!product) {
-    notFound();
-  }
+  const productRelation = project.products as ProductRelation | ProductRelation[] | null;
+  const product = Array.isArray(productRelation) ? productRelation[0] : productRelation;
+  if (!product) notFound();
 
   const strategyResult = project.selected_strategy_id
     ? await supabase
         .from("strategies")
-        .select("id, archetype, name, strategy_json")
+        .select("id, name, strategy_json")
         .eq("id", project.selected_strategy_id)
         .eq("project_id", project.id)
         .maybeSingle()
     : { data: null, error: null };
-
-  if (strategyResult.error) {
-    throw new Error("선택한 판매전략을 불러오지 못했습니다.", {
-      cause: strategyResult.error,
-    });
-  }
+  if (strategyResult.error) throw strategyResult.error;
 
   const parsedStrategy = strategyResult.data
     ? storedStrategySchema.safeParse(strategyResult.data.strategy_json)
@@ -102,37 +72,27 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div>
             <p className="text-sm font-semibold text-violet-600">DETAIL AI</p>
-            <p className="mt-1 text-sm text-neutral-500">Page Planner</p>
+            <p className="mt-1 text-sm text-neutral-500">상세페이지 초안</p>
           </div>
           <Link
             href={`/projects/${projectId}/strategies`}
-            className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+            className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
           >
-            판매전략으로 돌아가기
+            판매 방향으로 돌아가기
           </Link>
         </div>
       </header>
 
       <div className="border-b border-neutral-200 bg-neutral-950 text-white">
         <div className="mx-auto max-w-6xl px-6 py-9">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
-              Product Brain
-            </span>
-            <span className="text-xs text-neutral-500">→</span>
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
-              판매 전략
-            </span>
-            <span className="text-xs text-neutral-500">→</span>
-            <span className="rounded-full bg-violet-500 px-3 py-1.5 text-xs font-bold text-white">
-              Page Planner
-            </span>
-          </div>
+          <span className="inline-flex rounded-full bg-violet-500 px-3 py-1.5 text-xs font-bold">
+            카피 · 디자인 구성
+          </span>
           <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">
-            {product.name}의 페이지 구조 설계
+            {product.name}의 상세페이지를 구성할게요
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-400">
-            판매전략을 전환 역할과 미리 정의된 Block 조합으로 변환합니다.
+            선택한 판매 방향과 확인된 상품 정보를 바탕으로 초안을 만듭니다.
           </p>
         </div>
       </div>
@@ -141,9 +101,7 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
         <div>
           {strategy && strategyResult.data ? (
             <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-600">
-                Selected Strategy · {strategyResult.data.archetype}
-              </p>
+              <p className="text-xs font-bold text-violet-600">선택한 판매 방향</p>
               <h2 className="mt-3 text-2xl font-bold text-neutral-950">
                 {strategyResult.data.name}
               </h2>
@@ -153,35 +111,17 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
               <p className="mt-4 text-sm leading-6 text-neutral-500">
                 {strategy.coreMessage}
               </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {strategy.benefits.map((benefit, benefitIndex) => (
-                  <div
-                    key={`selected-strategy-benefit-${benefitIndex}`}
-                    className="rounded-2xl bg-neutral-50 p-4"
-                  >
-                    <p className="text-sm font-bold text-neutral-800">
-                      {benefit.title}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-neutral-500">
-                      {benefit.description}
-                    </p>
-                  </div>
-                ))}
-              </div>
             </section>
           ) : (
             <section className="rounded-3xl border border-amber-200 bg-white p-7 shadow-sm">
               <h2 className="text-xl font-bold text-neutral-950">
-                선택된 판매전략이 없습니다
+                먼저 판매 방향을 선택해주세요
               </h2>
-              <p className="mt-2 text-sm text-neutral-500">
-                판매전략을 생성하고 하나를 선택한 뒤 다시 진행해주세요.
-              </p>
               <Link
                 href={`/projects/${projectId}/strategies`}
                 className="mt-5 inline-flex rounded-xl bg-neutral-950 px-5 py-3 text-sm font-bold text-white"
               >
-                판매전략 선택하기
+                판매 방향 선택하기
               </Link>
             </section>
           )}
@@ -192,11 +132,8 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
             <PlannerForm
               projectId={projectId}
               providerConfigured={isPagePlannerConfigured()}
-              providerLabel={getPagePlannerProviderLabel()}
               hasPageDocument={parsedDocument.success}
-              sectionCount={
-                parsedDocument.success ? parsedDocument.data.sections.length : 0
-              }
+              sectionCount={parsedDocument.success ? parsedDocument.data.sections.length : 0}
               marketResearch={
                 parsedDocument.success
                   ? parsedDocument.data.marketResearch
@@ -205,7 +142,7 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
             />
           ) : (
             <section className="rounded-3xl bg-neutral-200 p-6 text-sm text-neutral-500">
-              판매전략 선택 후 PageDocument를 생성할 수 있습니다.
+              판매 방향을 선택하면 상세페이지 초안을 만들 수 있습니다.
             </section>
           )}
         </div>
