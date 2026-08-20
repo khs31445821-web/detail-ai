@@ -5,7 +5,7 @@ import { pageDocumentSchema } from "@/lib/page-document";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateWorkspace } from "@/lib/workspace/get-or-create-workspace";
 
-import { EditorClient } from "./editor-client";
+import { SimpleEditorClient } from "./simple-editor-client";
 
 export const maxDuration = 300;
 
@@ -38,9 +38,7 @@ function getGeneratedAssetLabel(metadata: unknown, index: number) {
     return `AI 생성 이미지 ${index + 1}`;
   }
   const preset =
-    "generation_preset" in metadata
-      ? String(metadata.generation_preset)
-      : "";
+    "generation_preset" in metadata ? String(metadata.generation_preset) : "";
   if (preset === "DETAIL") return "AI 디테일 컷";
   if (preset === "LIFESTYLE") return "AI 라이프스타일 컷";
   if (preset === "STUDIO") return "AI 스튜디오 컷";
@@ -54,14 +52,10 @@ export default async function EditorPage({ params }: EditorPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const workspace = await getOrCreateWorkspace();
-  if (!workspace) {
-    redirect("/login");
-  }
+  if (!workspace) redirect("/login");
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
@@ -70,10 +64,7 @@ export default async function EditorPage({ params }: EditorPageProps) {
       name,
       page_document,
       selected_strategy_id,
-      products (
-        id,
-        name
-      )
+      products (id, name)
     `)
     .eq("id", projectId)
     .eq("workspace_id", workspace.id)
@@ -84,20 +75,11 @@ export default async function EditorPage({ params }: EditorPageProps) {
       cause: projectError,
     });
   }
-  if (!project) {
-    notFound();
-  }
+  if (!project) notFound();
 
-  const productRelation = project.products as
-    | ProductRelation
-    | ProductRelation[]
-    | null;
-  const product = Array.isArray(productRelation)
-    ? productRelation[0]
-    : productRelation;
-  if (!product) {
-    notFound();
-  }
+  const productRelation = project.products as ProductRelation | ProductRelation[] | null;
+  const product = Array.isArray(productRelation) ? productRelation[0] : productRelation;
+  if (!product) notFound();
 
   const parsedDocument = pageDocumentSchema.safeParse(project.page_document);
   if (!parsedDocument.success) {
@@ -138,13 +120,11 @@ export default async function EditorPage({ params }: EditorPageProps) {
     }
   }
 
-  const pageDocument = parsedDocument.data;
-
   return (
-    <EditorClient
+    <SimpleEditorClient
       projectId={project.id}
       productName={product.name}
-      initialDocument={pageDocument}
+      initialDocument={parsedDocument.data}
       assetUrls={assetUrls}
       claudeConfigured={isAnthropicConfigured()}
       assets={assets.map((asset, index) => ({
