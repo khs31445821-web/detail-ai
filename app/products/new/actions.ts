@@ -24,30 +24,11 @@ const productSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, "상품명을 입력해주세요.")
     .max(120, "상품명은 120자 이내로 입력해주세요."),
-  price: z
-    .string()
-    .trim()
-    .min(1, "판매 가격을 입력해주세요.")
-    .regex(/^\d+$/, "판매 가격은 0 이상의 숫자로 입력해주세요.")
-    .transform(Number)
-    .refine(Number.isSafeInteger, "판매 가격을 다시 확인해주세요.")
-    .refine(
-      (price) => price <= 999_999_999,
-      "판매 가격은 999,999,999원 이하여야 해요."
-    ),
-  description: z
-    .string()
-    .trim()
-    .min(5, "간단 설명을 5자 이상 입력해주세요.")
-    .max(2000, "간단 설명은 2,000자 이내로 입력해주세요."),
 });
 
 type FieldErrors = {
   name?: string[];
-  price?: string[];
-  description?: string[];
   images?: string[];
 };
 
@@ -57,8 +38,6 @@ export type CreateProductState = {
   fieldErrors?: FieldErrors;
   values?: {
     name: string;
-    price: string;
-    description: string;
   };
 };
 
@@ -88,8 +67,6 @@ function sanitizeFileName(fileName: string) {
 function getFormValues(formData: FormData) {
   return {
     name: String(formData.get("name") ?? ""),
-    price: String(formData.get("price") ?? ""),
-    description: String(formData.get("description") ?? ""),
   };
 }
 
@@ -110,9 +87,7 @@ function getImages(formData: FormData) {
 function validateImages(images: File[]) {
   const errors: string[] = [];
 
-  if (images.length === 0) {
-    errors.push("상품 이미지를 한 장 이상 등록해주세요.");
-  } else if (images.length > MAX_IMAGE_COUNT) {
+  if (images.length > MAX_IMAGE_COUNT) {
     errors.push(`상품 이미지는 최대 ${MAX_IMAGE_COUNT}장까지 등록할 수 있어요.`);
   }
 
@@ -136,6 +111,26 @@ function validateImages(images: File[]) {
   }
 
   return errors;
+}
+
+function deriveInitialProductName(name: string, images: File[]) {
+  const trimmedName = name.trim();
+  if (trimmedName) {
+    return trimmedName;
+  }
+
+  const firstImage = images[0];
+  if (!firstImage) {
+    return "새 상품";
+  }
+
+  const withoutExtension = firstImage.name.replace(/\.[^.]+$/, "");
+  const readableName = withoutExtension
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return readableName || "이미지 기반 상품";
 }
 
 async function cleanupFailedCreation(
@@ -189,6 +184,12 @@ export async function createProduct(
   const images = getImages(formData);
   const imageErrors = validateImages(images);
 
+  const hasName = Boolean(values.name.trim());
+  const hasImages = images.length > 0;
+  if (!hasName && !hasImages) {
+    imageErrors.push("상품 사진 한 장 또는 상품명 중 하나는 입력해주세요.");
+  }
+
   if (!parsedProduct.success || imageErrors.length > 0) {
     const fieldErrors = parsedProduct.success
       ? {}
@@ -196,7 +197,7 @@ export async function createProduct(
 
     return {
       status: "error",
-      message: "입력한 내용을 확인한 뒤 다시 시도해주세요.",
+      message: "상품 사진 한 장 또는 상품명만 있으면 시작할 수 있어요.",
       fieldErrors: {
         ...fieldErrors,
         ...(imageErrors.length > 0 ? { images: imageErrors } : {}),
@@ -239,6 +240,7 @@ export async function createProduct(
     };
   }
 
+  const initialProductName = deriveInitialProductName(parsedProduct.data.name, images);
   let productId: string | undefined;
   let projectId: string | undefined;
   const uploadedPaths: string[] = [];
@@ -249,10 +251,10 @@ export async function createProduct(
       .insert({
         workspace_id: workspace.id,
         created_by: user.id,
-        name: parsedProduct.data.name,
-        base_price: parsedProduct.data.price,
+        name: initialProductName,
+        base_price: null,
         currency: "KRW",
-        description: parsedProduct.data.description,
+        description: null,
       })
       .select("id")
       .single();
@@ -266,47 +268,49 @@ export async function createProduct(
 
     productId = product.id;
 
-    const assetRows = [];
-    for (const [index, file] of images.entries()) {
-      const storagePath = `${workspace.id}/products/${productId}/original/${randomUUID()}-${sanitizeFileName(file.name)}`;
-      const fileBody = new Uint8Array(await file.arrayBuffer());
-      const { error: uploadError } = await supabase.storage
-        .from(PRODUCT_ASSETS_BUCKET)
-        .upload(storagePath, fileBody, {
-          cacheControl: "3600",
-          contentType: file.type,
-          upsert: false,
-        });
+    if (images.length > 0) {
+      const assetRows = [];
+      for (const [index, file] of images.entries()) {
+        const storagePath = `${workspace.id}/products/${productId}/original/${randomUUID()}-${sanitizeFileName(file.name)}`;
+        const fileBody = new Uint8Array(await file.arrayBuffer());
+        const { error: uploadError } = await supabase.storage
+          .from(PRODUCT_ASSETS_BUCKET)
+          .upload(storagePath, fileBody, {
+            cacheControl: "3600",
+            contentType: file.type,
+            upsert: false,
+          });
 
-      if (uploadError) {
-        throw new ProductCreationError(
-          `${index + 1}번째 이미지를 업로드하지 못했습니다. 파일 형식과 용량을 확인해주세요.`,
-          { cause: uploadError }
-        );
+        if (uploadError) {
+          throw new ProductCreationError(
+            `${index + 1}번째 이미지를 업로드하지 못했습니다. 파일 형식과 용량을 확인해주세요.`,
+            { cause: uploadError }
+          );
+        }
+
+        uploadedPaths.push(storagePath);
+        assetRows.push({
+          product_id: productId,
+          storage_path: storagePath,
+          mime_type: file.type,
+          metadata: {
+            original_filename: file.name,
+            file_size: file.size,
+            sort_order: index,
+          },
+        });
       }
 
-      uploadedPaths.push(storagePath);
-      assetRows.push({
-        product_id: productId,
-        storage_path: storagePath,
-        mime_type: file.type,
-        metadata: {
-          original_filename: file.name,
-          file_size: file.size,
-          sort_order: index,
-        },
-      });
-    }
+      const { error: assetsError } = await supabase
+        .from("product_assets")
+        .insert(assetRows);
 
-    const { error: assetsError } = await supabase
-      .from("product_assets")
-      .insert(assetRows);
-
-    if (assetsError) {
-      throw new ProductCreationError(
-        "이미지 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.",
-        { cause: assetsError }
-      );
+      if (assetsError) {
+        throw new ProductCreationError(
+          "이미지 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.",
+          { cause: assetsError }
+        );
+      }
     }
 
     const { data: project, error: projectError } = await supabase
@@ -315,7 +319,7 @@ export async function createProduct(
         workspace_id: workspace.id,
         product_id: productId,
         created_by: user.id,
-        name: `${parsedProduct.data.name} 상세페이지`,
+        name: `${initialProductName} 상세페이지`,
       })
       .select("id")
       .single();
