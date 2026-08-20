@@ -112,7 +112,7 @@ export async function saveStoreSettings(
         ...payload,
       });
       if (error) throw error;
-      revalidatePath(`/settings/store?productId=${product.id}`);
+      revalidatePath("/settings/store");
       return { status: "success", message: "이 상품에만 적용할 정보를 저장했습니다." };
     }
 
@@ -127,7 +127,7 @@ export async function saveStoreSettings(
     console.error("스토어 기본정보 저장 실패:", error);
     return {
       status: "error",
-      message: "스토어 기본정보를 저장하지 못했습니다. DB 마이그레이션 적용 여부를 확인해주세요.",
+      message: "스토어 기본정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.",
     };
   }
 }
@@ -146,5 +146,5 @@ export async function resetProductStoreOverride(formData: FormData) {
     .eq("product_id", productId.data)
     .eq("workspace_id", workspace.id);
   if (error) throw error;
-  revalidatePath(`/settings/store?productId=${productId.data}`);
+  revalidatePath("/settings/store");
 }
