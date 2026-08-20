@@ -123,268 +123,159 @@ export function ProductForm() {
   ];
 
   return (
-    <form
-      action={formAction}
-      className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_320px]"
-    >
-      <div className="space-y-6">
-        {state.status === "error" && state.message && (
-          <div
-            role="alert"
-            className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm leading-6 text-red-700"
-          >
-            <p className="font-semibold">상품을 등록하지 못했어요.</p>
-            <p className="mt-1">{state.message}</p>
-          </div>
-        )}
+    <form action={formAction} className="mx-auto max-w-4xl">
+      {state.status === "error" && state.message && (
+        <div
+          role="alert"
+          className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm leading-6 text-red-700"
+        >
+          <p className="font-semibold">시작하지 못했어요.</p>
+          <p className="mt-1">{state.message}</p>
+        </div>
+      )}
 
-        <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-7">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">
-              Basic info
+      <section className="overflow-hidden rounded-[32px] border border-neutral-200 bg-white shadow-[0_24px_80px_rgba(0,0,0,0.06)]">
+        <div className="p-6 sm:p-8 lg:p-10">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">
+              가장 빠른 시작
+            </span>
+            <h2 className="mt-4 text-2xl font-bold tracking-tight text-neutral-950 sm:text-3xl">
+              사진 한 장만 올려도 충분해요
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-neutral-500 sm:text-base">
+              상품 사진 또는 상품명 중 하나만 입력하면 AI가 상품을 이해하고,
+              판매기획·카피·디자인 방향·상세페이지 구조까지 이어서 만듭니다.
             </p>
-            <h2 className="mt-2 text-xl font-bold">기본 상품 정보</h2>
           </div>
 
-          <div className="space-y-6">
+          <div className="mx-auto mt-8 max-w-2xl">
+            <label
+              htmlFor="images"
+              className="group flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-violet-200 bg-gradient-to-b from-violet-50/70 to-white px-6 py-10 text-center transition hover:border-violet-400 hover:bg-violet-50"
+            >
+              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-600 text-3xl text-white shadow-lg shadow-violet-200 transition group-hover:-translate-y-0.5">
+                ↑
+              </span>
+              <span className="mt-5 text-base font-bold text-neutral-900">
+                상품 사진 업로드
+              </span>
+              <span className="mt-2 text-sm leading-6 text-neutral-500">
+                사진 한 장이면 바로 시작할 수 있어요
+                <br />
+                JPG, PNG, WEBP, GIF · 최대 6장
+              </span>
+            </label>
+            <input
+              ref={inputRef}
+              id="images"
+              name="images"
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleImagesChange}
+              className="sr-only"
+              aria-describedby={imageErrors.length ? "images-error" : undefined}
+            />
+
+            {selectedImages.length > 0 && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {selectedImages.map((image, index) => (
+                  <div
+                    key={image.id}
+                    className="overflow-hidden rounded-2xl border border-neutral-200 bg-white"
+                  >
+                    <div
+                      role="img"
+                      aria-label={`${index + 1}번째 상품 이미지 미리보기`}
+                      className="aspect-square bg-neutral-100 bg-cover bg-center"
+                      style={{ backgroundImage: `url(${image.previewUrl})` }}
+                    />
+                    <div className="flex items-center justify-between gap-2 p-3">
+                      <span className="truncate text-xs font-semibold text-neutral-600">
+                        이미지 {index + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeImage(image.id)}
+                        className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
+                      >
+                        제거
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {imageErrors.length > 0 && (
+              <p
+                id="images-error"
+                className="mt-3 text-sm font-medium text-red-600"
+                aria-live="polite"
+              >
+                {imageErrors[0]}
+              </p>
+            )}
+
+            <div className="my-7 flex items-center gap-4">
+              <div className="h-px flex-1 bg-neutral-200" />
+              <span className="text-xs font-bold tracking-[0.16em] text-neutral-400">
+                또는
+              </span>
+              <div className="h-px flex-1 bg-neutral-200" />
+            </div>
+
             <div>
               <label
                 htmlFor="name"
-                className="text-sm font-semibold text-neutral-800"
+                className="text-sm font-bold text-neutral-800"
               >
-                상품명 <span className="text-violet-600">*</span>
+                상품명만 입력
               </label>
               <input
                 id="name"
                 name="name"
                 type="text"
-                required
                 maxLength={120}
                 defaultValue={state.values?.name}
-                placeholder="예: 제주 유기농 감귤 3kg"
-                aria-describedby={
-                  state.fieldErrors?.name ? "name-error" : undefined
-                }
-                className="mt-2.5 w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3.5 text-sm outline-none transition placeholder:text-neutral-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                placeholder="예: 손잡이 스테인리스 텀블러"
+                aria-describedby={state.fieldErrors?.name ? "name-error" : undefined}
+                className="mt-2.5 w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-4 text-base outline-none transition placeholder:text-neutral-400 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
               />
               {state.fieldErrors?.name && (
                 <p id="name-error" className="mt-2 text-sm text-red-600">
                   {state.fieldErrors.name[0]}
                 </p>
               )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="price"
-                className="text-sm font-semibold text-neutral-800"
-              >
-                판매 가격 <span className="text-violet-600">*</span>
-              </label>
-              <div className="relative mt-2.5">
-                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-sm font-semibold text-neutral-500">
-                  ₩
-                </span>
-                <input
-                  id="price"
-                  name="price"
-                  type="number"
-                  required
-                  min={0}
-                  max={999999999}
-                  step={1}
-                  inputMode="numeric"
-                  defaultValue={state.values?.price}
-                  placeholder="29900"
-                  aria-describedby={
-                    state.fieldErrors?.price ? "price-error" : undefined
-                  }
-                  className="w-full rounded-2xl border border-neutral-200 bg-white py-3.5 pl-9 pr-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
-                />
-              </div>
-              {state.fieldErrors?.price && (
-                <p id="price-error" className="mt-2 text-sm text-red-600">
-                  {state.fieldErrors.price[0]}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="description"
-                className="text-sm font-semibold text-neutral-800"
-              >
-                간단 설명 <span className="text-violet-600">*</span>
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                required
-                minLength={5}
-                maxLength={2000}
-                rows={6}
-                defaultValue={state.values?.description}
-                placeholder="상품의 특징, 소재, 구성, 사용 방법 등 고객이 꼭 알아야 할 내용을 적어주세요."
-                aria-describedby={
-                  state.fieldErrors?.description
-                    ? "description-error"
-                    : undefined
-                }
-                className="mt-2.5 w-full resize-y rounded-2xl border border-neutral-200 bg-white px-4 py-3.5 text-sm leading-6 outline-none transition placeholder:text-neutral-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
-              />
-              <div className="mt-2 flex items-start justify-between gap-3">
-                <p className="text-xs leading-5 text-neutral-400">
-                  검증 가능한 사실 위주로 입력하면 이후 AI 분석의 정확도가 높아져요.
-                </p>
-                <span className="shrink-0 text-xs text-neutral-400">
-                  최대 2,000자
-                </span>
-              </div>
-              {state.fieldErrors?.description && (
-                <p
-                  id="description-error"
-                  className="mt-2 text-sm text-red-600"
-                >
-                  {state.fieldErrors.description[0]}
-                </p>
-              )}
+              <p className="mt-2 text-xs leading-5 text-neutral-400">
+                사진과 상품명을 둘 다 넣으면 분석 정확도가 더 좋아집니다.
+              </p>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-6">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">
-              Product images
-            </p>
-            <h2 className="mt-2 text-xl font-bold">원본 상품 이미지</h2>
-            <p className="mt-2 text-sm leading-6 text-neutral-500">
-              정면, 측면, 디테일, 구성품처럼 서로 다른 정보를 담은 이미지를
-              등록해주세요.
-            </p>
-          </div>
-
-          <label
-            htmlFor="images"
-            className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-center transition hover:border-violet-300 hover:bg-violet-50/50"
-          >
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
-              ↑
-            </span>
-            <span className="mt-4 text-sm font-semibold text-neutral-800">
-              이미지를 선택해주세요
-            </span>
-            <span className="mt-1.5 text-xs leading-5 text-neutral-400">
-              JPG, PNG, WEBP, GIF · 최대 6장 · 장당 5MB
-            </span>
-          </label>
-          <input
-            ref={inputRef}
-            id="images"
-            name="images"
-            type="file"
-            required
-            multiple
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            onChange={handleImagesChange}
-            className="sr-only"
-            aria-describedby={imageErrors.length ? "images-error" : undefined}
-          />
-
-          {imageErrors.length > 0 && (
-            <p
-              id="images-error"
-              className="mt-3 text-sm text-red-600"
-              aria-live="polite"
+        <div className="border-t border-neutral-200 bg-neutral-950 px-6 py-6 text-white sm:px-8 lg:px-10">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold">AI가 다음 작업을 이어서 합니다</p>
+              <p className="mt-1 text-xs leading-5 text-neutral-400">
+                상품 이해 → 판매 포인트 → 카피 → 디자인 구조 → 상세페이지
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={isPending || Boolean(clientImageError)}
+              className="inline-flex min-w-52 items-center justify-center rounded-2xl bg-violet-500 px-6 py-4 text-sm font-bold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
             >
-              {imageErrors[0]}
-            </p>
-          )}
-
-          {selectedImages.length > 0 && (
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {selectedImages.map((image, index) => (
-                <div
-                  key={image.id}
-                  className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white"
-                >
-                  <div
-                    role="img"
-                    aria-label={`${index + 1}번째 상품 이미지 미리보기`}
-                    className="aspect-[4/3] bg-neutral-100 bg-cover bg-center"
-                    style={{ backgroundImage: `url(${image.previewUrl})` }}
-                  />
-                  <div className="flex items-center gap-3 p-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-neutral-700">
-                        상품 이미지 {index + 1}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeImage(image.id)}
-                      className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
-                      aria-label={`${index + 1}번째 상품 이미지 제거`}
-                    >
-                      제거
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-
-      <aside className="h-fit rounded-3xl bg-neutral-950 p-6 text-white shadow-xl lg:sticky lg:top-8">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">
-          Next step
-        </p>
-        <h2 className="mt-3 text-xl font-bold">AI 상품 분석</h2>
-        <p className="mt-3 text-sm leading-6 text-neutral-400">
-          등록을 마치면 상품 Fact를 정리하고, 보호해야 할 Claim을 구분하는 분석
-          단계로 이동합니다.
-        </p>
-
-        <div className="my-6 h-px bg-neutral-800" />
-
-        <ol className="space-y-4 text-sm">
-          <li className="flex gap-3">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-bold">
-              1
-            </span>
-            <span className="pt-0.5 font-medium">상품 정보 등록</span>
-          </li>
-          <li className="flex gap-3 text-neutral-500">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-neutral-700 text-xs font-bold">
-              2
-            </span>
-            <span className="pt-0.5">AI 상품 분석</span>
-          </li>
-          <li className="flex gap-3 text-neutral-500">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-neutral-700 text-xs font-bold">
-              3
-            </span>
-            <span className="pt-0.5">판매 전략 선택</span>
-          </li>
-        </ol>
-
-        <button
-          type="submit"
-          disabled={isPending || Boolean(clientImageError)}
-          className="mt-7 flex w-full items-center justify-center rounded-2xl bg-violet-500 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
-        >
-          {isPending ? "상품과 이미지를 등록하는 중..." : "등록하고 AI 분석 시작"}
-        </button>
-        <p
-          className="mt-3 text-center text-xs leading-5 text-neutral-500"
-          aria-live="polite"
-        >
-          {isPending
-            ? "이미지 수와 용량에 따라 잠시 걸릴 수 있어요."
-            : "입력한 사실은 이후 단계에서도 보호됩니다."}
-        </p>
-      </aside>
+              {isPending ? "상품을 준비하는 중..." : "상세페이지 만들기 →"}
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-neutral-500" aria-live="polite">
+            목표 생성 시간 1~3분 · 부족한 정보만 나중에 짧게 확인합니다.
+          </p>
+        </div>
+      </section>
     </form>
   );
 }
